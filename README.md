@@ -26,7 +26,7 @@ Quantitative-Modeling-Prediction/
 └── README.md
 ```
 
-## Projects & Deliverables  
+## Project Overview & Deliverables  
 
 ### 1. Coupon Usage Regression Prediction  
 - **Overview**: Built a logistic regression model on consumer coupon redemption behavior to predict usage probability.  
