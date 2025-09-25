@@ -1,0 +1,646 @@
+---
+title: "Predicting Churn Behavior"
+author: Rohan Chawla
+format: html
+editor: visual
+---
+
+```{r}
+#| echo: false
+#| warning: false
+#| results: false
+
+packages_needed <-  c( 
+                      "GGally",
+                      "tidymodels",
+                      "skimr",
+                      "themis", #recipe steps for unbalanced data
+                      "kknn", #k nearest neighbour
+                      "rpart",  #decision trees
+                      "rpart.plot", #plotting decision trees
+                      "baguette", 
+                      "ranger", #random forests
+                      "xgboost", #xgboost
+                      "lightgbm", "bonsai", #lightgbm
+                      "parallel", "future", # use multiple cores
+                      "vip",
+                      "car" #for Levene test
+                      )
+packages_to_install <- packages_needed[!packages_needed %in%
+                                         installed.packages()]
+sapply(packages_to_install, install.packages,
+       dependencies=TRUE, repos="https://cloud.r-project.org")
+sapply(packages_needed, require, character=TRUE)
+
+knitr::opts_chunk$set(
+               echo = TRUE, 
+               message = FALSE,
+               warning = FALSE,
+               fig.align='center',
+               fig.show='hold',
+               size='footnotesize', 
+               fig.width=8, fig.height=4.5, 
+               out.width="60%")
+opt_width = 70 #60
+options(width = opt_width,  
+        pillar.print_min = 6,
+        pillar.print_max = 10
+        )
+
+
+cores <- parallel::detectCores(logical = TRUE)
+# plan(sequential)  #no parallel processing
+plan(multisession) #parallel processing
+```
+
+#Data Preparation
+
+```{r}
+#| echo: false
+#| warning: false
+#| results: false
+
+# Import data
+dt <- read.csv("tedpoppydata_final.csv")
+
+#glimpse(dt) #inspect the original data
+```
+
+Create new variables and test their relevant to the output. \[Data manipulation goes here.\] - combine all community activities (community_activity_index), determine total spending (total_spend)
+
+```{r}
+#| echo: false
+#| warning: false
+#| results: false
+
+dt <- dt |>
+  # combine all community-related data together
+  mutate(community_activity_index = community_posts_made + community_topics_made + community_profile_photo +
+           community_follows + community_followers) |>
+  # get average purchase in numeric
+  mutate(avg_purchase_value = as.numeric(gsub("\\$", "", avg_purchase_value))) |>
+  # calculate total spending
+  mutate(total_purchase_value = num_purchases * avg_purchase_value)
+  
+```
+
+Convert variable formats and make them consistent. \[Type conversion goes here.\]
+
+```{r}
+#| echo: false
+#| warning: false
+
+dt <- dt |>
+  # Convert number of times users response to survey to numeric
+  mutate(satisfaction_survey = ifelse(satisfaction_survey == "NoResponse", 0, as.numeric(satisfaction_survey))) |>
+  mutate(satisfaction_survey = factor(satisfaction_survey, levels = c(0, 1, 2, 3, 4, 5), labels = c("0","1","2","3","4","5"))) |>
+  # Convert days_since_last_web_purchase to numeric
+  mutate(days_since_last_web_purchase = as.numeric(gsub(" days", "", days_since_last_web_purchase))) |>
+  # Convert logical to categorical variable [0: FASLE, 1: TRUE]
+  mutate(dog_stage_puppy = factor(dog_stage_puppy, levels = c(0, 1), labels = c("FALSE", "TRUE"))) |>
+  mutate(made_instore_purchase = factor(made_instore_purchase, levels = c(0, 1), labels = c("FALSE", "TRUE"))) |>
+  mutate(retained_binary = factor(retained_binary, levels = c(0, 1), labels = c("Churned", "Retained"))) |>
+  mutate(discounted_rate = factor(discounted_rate, levels = c("FALSE", "TRUE"), labels = c("FALSE", "TRUE"))) |>
+  mutate(subscription_payment_problem_last6Months = factor(subscription_payment_problem_last6Months, levels = c("FALSE", "TRUE"), labels = c("FALSE", "TRUE")))|>
+  # Encode qualitative columns as factors (instead of character strings)
+  mutate(opened_last_email = factor(opened_last_email, levels = c("FALSE", "TRUE"), labels = c("FALSE", "TRUE"))) |>
+  mutate_if(is.character, as.factor)
+```
+
+#Data Exploratory
+
+This code section is where we perform all statistical tests and comparisons.
+
+##T-Test
+
+```{r}
+#| echo: false
+#| warning: false
+
+leveneTest(app_visits ~ retained_binary, data = dt)
+t.test(app_visits ~ retained_binary, dt, var.equal = FALSE)
+
+leveneTest(age ~ retained_binary, data = dt)
+t.test(age ~ retained_binary, dt, var.equal = FALSE)
+
+leveneTest(website_visits ~ retained_binary, data = dt)
+t.test(website_visits ~ retained_binary, dt, var.equal = FALSE)
+
+leveneTest(num_purchases ~ retained_binary, data = dt)
+t.test(num_purchases ~ retained_binary, dt, var.equal = FALSE)
+
+leveneTest(avg_purchase_value ~ retained_binary, data = dt)
+t.test(avg_purchase_value ~ retained_binary, dt, var.equal = FALSE)
+
+leveneTest(total_purchase_value ~ retained_binary, data = dt)
+t.test(total_purchase_value ~ retained_binary, dt, var.equal = FALSE)
+
+leveneTest(days_since_last_web_purchase ~ retained_binary, data = dt)
+t.test(days_since_last_web_purchase ~ retained_binary, dt, var.equal = FALSE)
+
+leveneTest(count_dogs  ~ retained_binary, data = dt)
+t.test(count_dogs ~ retained_binary, dt, var.equal = FALSE)
+```
+
+##Chi-Squared
+
+```{r}
+#| echo: false
+#| warning: false
+
+# Create contingency tables
+community_activity_index_table <- table(dt$community_activity_index, dt$retained_binary) # community_activity_index vs retained_binary
+gender_table <- table(dt$gender, dt$retained_binary)  # gender vs retained_binary
+ticket_table <- table(dt$support_ticket, dt$retained_binary)  # ticket vs retained_binary
+satisfaction_table <- table(dt$satisfaction_survey, dt$retained_binary)  # satisfaction vs retained_binary
+lastlogin_table <- table(dt$last_login_device, dt$retained_binary)  # last_login_device vs retained_binary
+lastbrowser_table <- table(dt$last_browser, dt$retained_binary)  # last_browser vs retained_binary
+location_table <- table(dt$location, dt$retained_binary)  # location vs retained_binary
+subscp_table <- table(dt$subscription, dt$retained_binary)  # subscription vs retained_binary
+subscp_freq_table <- table(dt$subscription_frequency, dt$retained_binary) # subscription_freq vs retained_binary
+dog_table <- table(dt$dog_stage_puppy, dt$retained_binary) # dog_stage_puppy vs retained_binary
+lastemial_table <- table(dt$opened_last_email, dt$retained_binary) # open_last_email vs retained_binary
+discount_table <- table(dt$discounted_rate, dt$retained_binary) # discount_rate vs retained_binary
+payment_table <- table(dt$payment_type, dt$retained_binary) # payment_type vs retained_binary
+sub_prob_table <- table(dt$subscription_payment_problem_last6Months, dt$retained_binary) # subscription_payment_problem vs retained_binary
+instore_table <- table(dt$made_instore_purchase, dt$retained_binary) # made_instore_purchase vs retained_binary
+country_table <- table(dt$country_code, dt$retained_binary) # country_code vs retained_binary
+
+
+# Perform Chi-Squared tests
+chisq.test(community_activity_index_table)
+chisq.test(gender_table)
+chisq.test(ticket_table)
+chisq.test(satisfaction_table)
+chisq.test(lastlogin_table)
+chisq.test(lastbrowser_table )
+chisq.test(location_table)
+chisq.test(subscp_table )
+chisq.test(dog_table)
+chisq.test(lastemial_table)
+chisq.test(discount_table )
+chisq.test(payment_table)
+chisq.test(sub_prob_table)
+chisq.test(instore_table)
+chisq.test(country_table)
+```
+
+##Other statistics
+
+```{r}
+#| echo: false
+#| warning: false
+
+# Other statistics go here
+
+# What proportion of retained customers? Approx 84%.
+dt |> 
+  count(retained_binary) |> 
+  mutate(prop = n/sum(n))
+```
+
+# Modelling
+
+## Model parameters
+
+All model parameters goes here.
+
+```{r}
+# Number of data in a data sample slice
+NumData = 200000
+# Number of folds
+NumFolds = 10
+
+# ML model parameters
+
+# KNN
+knn_neighbours = 4
+# Random Forest
+num_trees = 1000
+# NN
+nn_hidden_unit = 10
+n_epochs = 1000
+
+```
+
+## Pre-processing
+
+```{r}
+#| echo: false
+#| warning: false
+#| results: false
+
+set.seed(234)
+ted_data <- 
+  dt |>
+    # Encode qualitative columns as factors (instead of character strings)
+    mutate_if(is.character, as.factor) |>
+    # Remove variables that do not provide linkage to customers' churning.
+   select(-user_ID, -country_code, -last_login_device, -opened_last_email, -community_profile_photo, -payment_type, 
+          -num_purchases,-avg_purchase_value, -community_topics_made, -community_followers, -community_activity_index ) |>
+    slice_sample(n = NumData)
+```
+
+### Partition data using $k$-fold cross-validation
+
+75% training, 25% test
+
+```{r}
+#| echo: false
+#| warning: false
+#| results: false
+
+# Fix the random numbers by setting the seed 
+# This enables the analysis to be reproducible 
+# when random numbers are used 
+set.seed(222)
+
+# Split 3/4 of the data into the training set 
+ted_split <- initial_split(ted_data, prop = 0.75, strata = retained_binary)
+
+# Create data frames for the three sets:
+ted_train_data <- training(ted_split)
+ted_test_data  <- testing(ted_split)
+
+
+# Create folds
+set.seed(987)
+cv_folds <- vfold_cv(ted_train_data, 
+          v = NumFolds, 
+          strata = retained_binary) 
+```
+
+### Pre-process data (create recipe)
+
+We will use one recipe for all models, so the pre-processing needs to be suitable for all models. For example, categorical variables are converted to dummy variables because this is required for logistic regression, even though it is not required for random forests.
+
+```{r}
+#| echo: false
+#| warning: false
+#| results: false
+
+ted_recipe <- 
+  # create recipe and specify formula
+  recipe(retained_binary ~ ., data = ted_train_data)  |>  
+  #remove variables with NAs, skip=TRUE mean this is not applied to test data
+  step_naomit(everything(), skip = TRUE) |> 
+  # normalize variables  
+  step_normalize(all_numeric_predictors())  |> 
+  # create dummy variables for nominal predictors
+  step_dummy(all_nominal_predictors())|> 
+  # remove zero variance predictors
+  step_zv(all_predictors()) |> 
+  # Resample from the minority class, so there are equal number of on-time/late
+  step_upsample(retained_binary, over_ratio = 1) 
+  # step_corr(all_numeric_predictors(), threshold = 0.9)
+```
+
+### Inspect impact of recipe
+
+```{r}
+#| echo: false
+#| warning: false
+#| results: false
+
+glimpse(ted_train_data)
+ted_recipe |> 
+  prep() |> 
+  bake(ted_train_data) 
+  ## |>  glimpse()
+```
+
+# Train
+
+## Define model and workflow specification for each algorithm
+
+### Logistic regression
+
+```{r}
+#| echo: false
+#| warning: false
+#| results: false
+
+lr_model <- 
+  logistic_reg() |> 
+  set_engine("glm")
+
+lr_wflow <- workflow() |> 
+                  add_model(lr_model) |> 
+                  add_recipe(ted_recipe)
+```
+
+### k-Nearest Neighbours
+
+```{r}
+#| echo: false
+#| warning: false
+#| results: false
+
+knn_model <-
+  nearest_neighbor(neighbors = !!knn_neighbours) |>
+  set_engine('kknn') |>
+  set_mode('classification')
+
+
+knn_wflow <- workflow() |> 
+                  add_model(knn_model) |> 
+                  add_recipe(ted_recipe)
+```
+
+### Random Forests
+
+```{r}
+#| echo: false
+#| warning: false
+#| results: false
+
+rf_model <- 
+  rand_forest(trees = !!num_trees)|> 
+  set_engine("ranger", 
+             importance = "impurity"  #optional - provide info about variable importance
+        ) |> 
+  set_mode("classification")
+
+rf_wflow <-   workflow() |> 
+  add_model(rf_model) |> 
+  add_recipe(ted_recipe)
+```
+
+### XGB
+
+```{r}
+#| echo: false
+#| warning: false
+#| results: false
+
+xgb_model <- 
+  boost_tree() |>
+  set_engine("xgboost" ) |>
+  set_mode("classification") 
+
+xgb_wflow <- 
+  workflow() |> 
+  add_model(xgb_model) |> 
+  add_recipe(ted_recipe)
+```
+
+### LightGBM
+
+```{r}
+#| echo: false
+#| warning: false
+#| results: false
+
+lgbm_model <- 
+  boost_tree() |>
+  set_engine("lightgbm" ) |>
+  set_mode("classification") 
+
+lgbm_wflow <- 
+  workflow() |> 
+  add_model(lgbm_model) |> 
+  add_recipe(ted_recipe)
+```
+
+### Neural Network
+
+```{r}
+
+nnet_model <- 
+  mlp(hidden_units = !!nn_hidden_unit, epochs = !!n_epochs) |>
+  set_engine("nnet" ) |>
+  set_mode("classification") 
+
+nnet_wflow <- 
+  workflow() |> 
+  add_model(nnet_model) |> 
+  add_recipe(ted_recipe)
+```
+
+## Use workflow to train the models
+
+Define metric set to use for evaluation
+
+```{r}
+#| echo: false
+#| warning: false
+#| results: false
+
+ted_metrics <- metric_set(accuracy, roc_auc, sensitivity, specificity, bal_accuracy,
+                              ppv, npv
+                              ## other metrics are possible, e.g. 
+                              #, f_meas, kap, recall, precision
+                              )
+
+```
+
+Use the function `fit_resamples` to fit using $k$ fold cross validation
+
+```{r}
+#| echo: false
+#| warning: false
+#| results: false
+
+print("Start Logistic Regression: ")
+Sys.time()
+lr_res <- lr_wflow |>
+  fit_resamples(
+     resamples = cv_folds, 
+     metrics = ted_metrics,
+     control = control_grid(save_pred = TRUE,
+                            parallel_over = "everything")
+    ) 
+Sys.time()
+
+print("Start k-Nearest Neighbours: ")
+Sys.time()
+knn_res <- knn_wflow |>
+  fit_resamples(
+     resamples = cv_folds, 
+     metrics = ted_metrics,
+     control = control_grid(save_pred = TRUE,
+                            parallel_over = "everything")
+    ) 
+Sys.time()
+
+print("Start Random Forest: ")
+Sys.time()
+rf_res <- rf_wflow |>
+  fit_resamples(
+     resamples = cv_folds, 
+     metrics = ted_metrics,
+     control = control_grid(save_pred = TRUE,
+                            parallel_over = "everything")
+    ) 
+Sys.time()
+
+print("Start XGB: ")
+Sys.time()
+ xgb_res <- xgb_wflow |>
+   fit_resamples(
+      resamples = cv_folds,
+     metrics = ted_metrics,
+      control = control_grid(save_pred = TRUE,
+                            parallel_over = "everything")
+    )
+Sys.time()
+
+
+print("Start LightGBM: ")
+Sys.time()
+ lgbm_res <- lgbm_wflow |>
+   fit_resamples(
+      resamples = cv_folds,
+     metrics = ted_metrics,
+      control = control_grid(save_pred = TRUE,
+                            parallel_over = "everything")
+    )
+Sys.time()
+
+print("Start Neural Networks: ")
+Sys.time()
+ nnet_res <- nnet_wflow |>
+   fit_resamples(
+      resamples = cv_folds,
+     metrics = ted_metrics,
+      control = control_grid(save_pred = TRUE,
+                            parallel_over = "everything")
+    )
+Sys.time()
+
+```
+
+# Examine results (e.g. mean AUC-ROC, mean sensitivity) across all folds for each model
+
+To show metrics for each fold, use the option `summarize = FALSE`
+
+```{r}
+#| echo: false
+#| warning: false
+#| results: false
+
+# Combine results
+all_res <- 
+bind_rows(
+lr_res   |> collect_metrics(summarize = TRUE) |> mutate(model = "Logistic Regression"),
+knn_res  |> collect_metrics(summarize = TRUE) |> mutate(model = "KNN"),
+rf_res   |> collect_metrics(summarize = TRUE) |> mutate(model = "Random Forest"),
+xgb_res  |> collect_metrics(summarize = TRUE) |> mutate(model = "XGBoost"),
+lgbm_res |> collect_metrics(summarize = TRUE) |> mutate(model = "LightGBM"),
+nnet_res |> collect_metrics(summarize = TRUE) |> mutate(model = "Neural Networks")
+)
+
+# Combine predictions
+all_pred <- 
+bind_rows(
+lr_res   |> collect_predictions()  |> mutate(model = "Logistic Regression"),
+knn_res  |> collect_predictions()  |> mutate(model = "KNN"),
+rf_res   |> collect_predictions()  |> mutate(model = "Random Forest"),
+xgb_res  |> collect_predictions()  |> mutate(model = "XGBoost"),
+lgbm_res |> collect_predictions()  |> mutate(model = "LightGBM"),
+nnet_res |> collect_predictions() |> mutate(model = "Neural Networks")
+  )
+```
+
+```{r}
+#| echo: false
+#| warning: false
+#| results: false
+
+# inspect results
+all_pred |> 
+  group_by(id,model) |># id contains our folds
+  roc_curve(retained_binary, .pred_Churned) |>
+  autoplot(aes(col = model)) + facet_wrap(facets = vars(model)) +
+  theme(legend.position = "none") + 
+  labs(title = "ROC by fold for selected algorithms")
+```
+
+```{r, fig.height = 12}
+#| echo: false
+#| warning: false
+#| results: false
+
+all_res |> 
+  ggplot() + 
+  geom_col(aes(y = reorder(model, desc(model)), x = mean, fill = model)) +
+  facet_wrap(facets = vars(.metric), ncol = 2) +
+  labs(y = "model") + 
+  xlim(0,1)+
+  theme(panel.border = element_rect(colour = "black", fill=NA, linewidth=1))+
+  theme(legend.position = "none") 
+
+view(all_res)
+```
+
+# Choose best model
+
+Select the best model (could use other criteria)
+
+```{r}
+#| echo: false
+#| warning: false
+#| results: false
+
+all_res |> filter(.metric == "roc_auc") |> slice_max(mean)
+```
+
+Finalise the workflow
+
+```{r}
+#| echo: false
+#| warning: false
+#| results: false
+
+# Select the model that we want to finalize.
+
+# final_wflow <-   lr_wflow 
+# final_wflow <-   knn_wflow 
+# final_wflow <-   xgb_wflow
+# final_wflow <-   rf_wflow 
+final_wflow <-   lgbm_wflow
+# final_wflow <- nnet_wflow
+```
+
+## Evaluate the last fitted model on the test data
+
+Do a final fit (train on training data and test on testing data)
+
+```{r}
+#| echo: false
+#| warning: false
+#| results: false
+
+final_fit <- final_wflow |> last_fit(ted_split, metrics = ted_metrics)
+final_res <- final_fit |>  collect_metrics()
+final_pred <- final_fit |> collect_predictions()
+final_pred |> roc_curve(truth = retained_binary, .pred_Churned) |> autoplot()
+```
+
+## Confusion matrix
+
+```{r}
+#| echo: false
+#| warning: false
+#| results: false
+
+final_conf <- final_pred |>
+ conf_mat(truth = retained_binary, .pred_class)
+final_conf
+summary(final_conf) |> print(n = 10)
+
+```
+
+
+## Check variable ranking
+
+This is where we check for important variables that influence customer's churn decisions.
+
+```{r}
+#| echo: false
+#| warning: false
+#| results: false
+ 
+library(vip) 
+final_fit |> pluck(".workflow", 1) |>  pull_workflow_fit() |> vip(num_features = 30)
+```
