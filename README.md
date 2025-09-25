@@ -1,6 +1,5 @@
 # Quantitative-Modeling-Prediction
 Predictive and econometric modeling projects covering regression, classification, churn analysis, and GDP forecasting — demonstrating expertise in statistical inference and applied machine learning.
-
 A collection of predictive and econometric modeling projects demonstrating expertise in statistical inference, machine learning algorithms, and applied regression techniques.  
 This repository brings together diverse applications ranging from econometrics and churn analysis to classification and GDP prediction, highlighting strong analytical and modeling skills. 
 ---
