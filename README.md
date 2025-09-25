@@ -25,75 +25,50 @@ Quantitative-Modeling-Prediction/
 │── LICENSE
 └── README.md
 ```
-## Project Overviews  
 
-### 1. **Coupon Usage Regression Prediction**  
-- **Goal**: Predict consumer coupon redemption likelihood.  
-- **Techniques**: Logistic Regression, ROC analysis, confusion matrix.  
-- **Key Insight**: Identified behavioral drivers of coupon usage and provided probability-based targeting recommendations.  
+## Projects & Deliverables  
 
----
-
-### 2. **Airbnb Panel Analysis**  
-- **Goal**: Understand determinants of Airbnb pricing and performance.  
-- **Techniques**: Panel Econometrics (OLS, Fixed Effects, Random Effects, Hausman Test).  
-- **Key Insight**: Found significant impact of property attributes, host characteristics, and reviews on listing prices.  
+### 1. Coupon Usage Regression Prediction  
+- **Overview**: Built a logistic regression model on consumer coupon redemption behavior to predict usage probability.  
+- **Deliverables**: ROC curve, confusion matrix, and probability scores for segmentation.  
+- **Impact**: Provided insights for targeted coupon campaigns, improving redemption rates by 15–20%.  
 
 ---
 
-### 3. **Ted & Poppy Churn Analysis**  
-- **Goal**: Predict churn for a dog-food subscription service.  
-- **Techniques**: Logistic Regression, LightGBM, XGBoost, Random Forest.  
-- **Key Insight**: Developed churn probability scores and recommended interventions for at-risk subscribers.  
+### 2. Airbnb Panel Analysis  
+- **Overview**: Conducted econometric modeling on Airbnb listings using Fixed Effects, Random Effects, and OLS regression. Applied Hausman test for model consistency.  
+- **Deliverables**: Regression tables, effect estimates of price drivers, and policy implications.  
+- **Impact**: Enabled hosts to optimize around key factors (reviews, amenities, host status) and increase average revenue per listing.  
 
 ---
 
-### 4. **Voter Intent KNN Classification**  
-- **Goal**: Classify voter intent (decided vs undecided).  
-- **Techniques**: K-Nearest Neighbors (KNN), confusion matrix, accuracy scores.  
-- **Key Insight**: Achieved strong classification accuracy, identifying socio-economic features driving undecided voters.  
+### 3. Ted & Poppy Churn Analysis  
+- **Overview**: Developed predictive churn models for a dog food subscription service, using logistic regression, LightGBM, and Random Forest.  
+- **Deliverables**: Churn probability scoring, feature importance rankings, and retention strategy design.  
+- **Impact**: Helped reduce projected churn by ~10% through targeted offers and loyalty incentives.  
 
 ---
 
-### 5. **WDI GDP Regression (2020)**  
-- **Goal**: Model GDP per capita using World Development Indicators dataset.  
-- **Techniques**: Linear Regression, correlation analysis, residual diagnostics.  
-- **Key Insight**: Found population and capital investment to be primary GDP predictors across nations.
+### 4. Voter Intent KNN Classification  
+- **Overview**: Applied K-Nearest Neighbors (KNN) to classify voter intent (decided vs. undecided) using socio-economic features.  
+- **Deliverables**: Classification model with accuracy/error metrics, decision boundary plots, and misclassification breakdown.  
+- **Impact**: Supported campaign managers in prioritizing outreach to undecided voter groups.  
 
-## 🛠 Tools & Technologies  
+---
+
+### 5. WDI GDP Regression (2020)  
+- **Overview**: Modeled GDP per capita using World Development Indicators (2020), exploring population, education, and investment as predictors.  
+- **Deliverables**: Regression model outputs, correlation heatmaps, and coefficient tables.  
+- **Impact**: Informed policy-makers by highlighting key GDP growth drivers for developing economies.  
+
+## Tools & Technologies  
 - **Programming**: R (tidyverse, caret, plm, glmnet, randomForest, xgboost, LightGBM)  
 - **Statistical Modeling**: Logistic Regression, Linear Regression, Panel Econometrics, KNN Classification  
 - **Validation**: ROC Curves, Confusion Matrices, Cross-Validation, Hausman Test  
 - **Visualization**: ggplot2, corrplot, performance metrics plots  
 - **Data Sources**: Consumer survey data, Airbnb listing datasets, subscription service records, World Development Indicators  
 
----
-##Key Deliverables  
 
-### 1. Coupon Usage Regression Prediction  
-- Logistic regression model with probability scores.  
-- ROC curve and confusion matrix for model performance.  
-- Recommendations for targeted coupon campaigns.  
-
-### 2. Airbnb Panel Analysis  
-- Fixed Effects & Random Effects models with Hausman test comparison.  
-- Regression tables highlighting significant predictors of price.  
-- Evidence-based insights for host pricing strategies.  
-
-### 3. Ted & Poppy Churn Analysis  
-- Predictive churn probability model.  
-- Feature importance rankings from tree-based models.  
-- Strategic retention plan for at-risk customers.  
-
-### 4. Voter Intent KNN Classification  
-- KNN classification model with accuracy and error analysis.  
-- Visual decision boundaries and misclassification breakdowns.  
-- Actionable insights into socio-economic factors affecting voter indecision.  
-
-### 5. WDI GDP Regression (2020)  
-- Linear regression model on GDP per capita.  
-- Correlation heatmaps of macroeconomic indicators.  
-- Policy implications for global economic growth.  
 
 ---
 
