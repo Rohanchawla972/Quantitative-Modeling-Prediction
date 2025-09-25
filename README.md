@@ -1,5 +1,4 @@
 # Quantitative-Modeling-Prediction  
-
 ![R](https://img.shields.io/badge/R-Programming-blue)  
 ![License: MIT](https://img.shields.io/badge/License-MIT-green)  
 ![Status](https://img.shields.io/badge/Status-Active-brightgreen)  
